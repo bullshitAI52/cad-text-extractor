@@ -1,0 +1,353 @@
+[Python 原创] python操作CAD，文本批量提取   [复制链接]
+Eks6666
+
+74
+
+主题
+173
+
+回帖
+361
+
+积分
+前途无量
+精华0威望1 点热心值280 点悬赏值0 点听众65贡献值0 点吾爱币1042 CB违规1 次注册时间2023-7-21
+电梯直达楼主
+发表于 2025-7-6 11:24 | 只看该作者
+本帖最后由 Eks6666 于 2025-7-6 11:27 编辑
+
+
+import sys
+import os
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+                             QLabel, QLineEdit, QPushButton, QProgressBar, QFileDialog,
+                             QMessageBox, QGroupBox)
+from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PyQt5.QtGui import QFont, QIcon
+import pyautocad
+from openpyxl import Workbook
+
+class CadExtractorThread(QThread):
+    progress_signal = pyqtSignal(int, str)
+    finished_signal = pyqtSignal(bool, str)
+   
+    def __init__(self, folder_path, excel_path):
+        super().__init__()
+        self.folder_path = folder_path
+        self.excel_path = excel_path
+        self.running = True
+        
+    def run(self):
+        try:
+            # 连接到AutoCAD
+            acad = pyautocad.Autocad()
+            
+            if not acad.app:
+                self.finished_signal.emit(False, "无法连接到AutoCAD，请确保AutoCAD正在运行")
+                return
+            
+            # 创建Excel工作簿
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "CAD文本汇总"
+            ws.append(["文件名", "序号", "文本内容", "X坐标", "Y坐标", "Z坐标"])
+            
+            total_count = 0
+            processed_files = 0
+            dwg_files = [f for f in os.listdir(self.folder_path) if f.lower().endswith('.dwg')]
+            total_files = len(dwg_files)
+            
+            for filename in dwg_files:
+                if not self.running:
+                    break
+                    
+                filepath = os.path.join(self.folder_path, filename)
+                file_count = 0
+               
+                try:
+                    # 打开CAD文件
+                    doc = acad.app.Documents.Open(filepath)
+                    self.progress_signal.emit(processed_files * 100 // total_files, f"正在处理: {filename}")
+                    
+                    # 设置当前文档
+                    acad.doc = doc
+                    
+                    # 遍历当前文档中的文本对象
+                    for obj in acad.iter_objects(['Text', 'MText']):
+                        try:
+                            total_count += 1
+                            file_count += 1
+                            text_content = obj.TextString
+                            insertion_point = obj.InsertionPoint
+                           
+                            ws.append([
+                                filename,
+                                file_count,
+                                text_content,
+                                insertion_point[0],
+                                insertion_point[1],
+                                insertion_point[2] if len(insertion_point) > 2 else 0,
+                            ])
+                           
+                        except Exception as e:
+                            continue
+                    
+                    # 关闭当前文档
+                    doc.Close(False)
+                    processed_files += 1
+                    
+                except Exception as e:
+                    continue
+            
+            # 保存Excel文件
+            if self.running:
+                wb.save(self.excel_path)
+                self.finished_signal.emit(True, f"成功处理 {processed_files}/{total_files} 个文件\n提取 {total_count} 个文本对象")
+            else:
+                self.finished_signal.emit(False, "操作已取消")
+               
+        except Exception as e:
+            self.finished_signal.emit(False, f"发生错误: {str(e)}")
+            
+    def stop(self):
+        self.running = False
+
+class CadTextExtractorUI(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("CAD文本提取工具")
+        self.setGeometry(100, 100, 600, 400)
+        self.setWindowIcon(QIcon("cad_icon.png"))  # 替换为您自己的图标或删除此行
+        
+        # 初始化线程
+        self.extractor_thread = None
+        
+        # 设置主窗口样式
+        self.setStyleSheet("""
+            QMainWindow {
+                background-color: #f5f5f5;
+            }
+            QGroupBox {
+                border: 1px solid #ccc;
+                border-radius: 5px;
+                margin-top: 10px;
+                padding-top: 15px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 3px;
+            }
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                text-align: center;
+                text-decoration: none;
+                font-size: 14px;
+                margin: 4px 2px;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+            QPushButton:disabled {
+                background-color: #cccccc;
+            }
+            QPushButton#cancel_button {
+                background-color: #f44336;
+            }
+            QPushButton#cancel_button:hover {
+                background-color: #d32f2f;
+            }
+            QLineEdit {
+                padding: 8px;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+            }
+            QProgressBar {
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                text-align: center;
+            }
+            QProgressBar::chunk {
+                background-color: #4CAF50;
+                width: 10px;
+            }
+        """)
+        
+        self.init_ui()
+        
+    def init_ui(self):
+        main_widget = QWidget()
+        main_layout = QVBoxLayout()
+        
+        # 标题
+        title_label = QLabel("CAD文本批量提取工具")
+        title_label.setFont(QFont("Arial", 16, QFont.Bold))
+        title_label.setAlignment(Qt.AlignCenter)
+        title_label.setStyleSheet("color: blue; margin-bottom: 5px;")
+        main_layout.addWidget(title_label)
+
+        #title_label = QLabel("authour: 摸鱼 | VX: Lee-three-nine")
+        #title_label.setFont(QFont("微软", 12))
+        #title_label.setAlignment(Qt.AlignCenter)
+        #title_label.setStyleSheet("color: #333; margin-bottom: 5px;")
+        #main_layout.addWidget(title_label)
+
+
+        # 输入组
+        input_group = QGroupBox("文件设置")
+        input_layout = QVBoxLayout()
+        
+        # CAD文件夹选择
+        cad_folder_layout = QHBoxLayout()
+        cad_folder_label = QLabel("CAD文件夹:")
+        self.cad_folder_edit = QLineEdit()
+        self.cad_folder_edit.setPlaceholderText("请选择包含DWG文件的文件夹")
+        cad_folder_button = QPushButton("浏览...")
+        cad_folder_button.clicked.connect(self.select_cad_folder)
+        cad_folder_layout.addWidget(cad_folder_label)
+        cad_folder_layout.addWidget(self.cad_folder_edit)
+        cad_folder_layout.addWidget(cad_folder_button)
+        input_layout.addLayout(cad_folder_layout)
+        
+        # Excel保存路径
+        excel_layout = QHBoxLayout()
+        excel_label = QLabel("保存路径:")
+        self.excel_edit = QLineEdit()
+        self.excel_edit.setPlaceholderText("请选择Excel文件保存位置")
+        excel_button = QPushButton("浏览...")
+        excel_button.clicked.connect(self.select_excel_path)
+        excel_layout.addWidget(excel_label)
+        excel_layout.addWidget(self.excel_edit)
+        excel_layout.addWidget(excel_button)
+        input_layout.addLayout(excel_layout)
+        
+        input_group.setLayout(input_layout)
+        main_layout.addWidget(input_group)
+        
+        # 进度组
+        progress_group = QGroupBox("提取进度")
+        progress_layout = QVBoxLayout()
+        
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setValue(0)
+        progress_layout.addWidget(self.progress_bar)
+        
+        self.status_label = QLabel("准备就绪")
+        self.status_label.setAlignment(Qt.AlignCenter)
+        progress_layout.addWidget(self.status_label)
+        
+        progress_group.setLayout(progress_layout)
+        main_layout.addWidget(progress_group)
+        
+        # 按钮组
+        button_layout = QHBoxLayout()
+        
+        self.start_button = QPushButton("开始提取")
+        self.start_button.clicked.connect(self.start_extraction)
+        button_layout.addWidget(self.start_button)
+        
+        self.cancel_button = QPushButton("取消")
+        self.cancel_button.setObjectName("cancel_button")
+        self.cancel_button.clicked.connect(self.cancel_extraction)
+        self.cancel_button.setEnabled(False)
+        button_layout.addWidget(self.cancel_button)
+        
+        main_layout.addLayout(button_layout)
+        
+        main_widget.setLayout(main_layout)
+        self.setCentralWidget(main_widget)
+        
+    def select_cad_folder(self):
+        folder = QFileDialog.getExistingDirectory(self, "选择CAD文件夹")
+        if folder:
+            self.cad_folder_edit.setText(folder)
+            
+    def select_excel_path(self):
+        path, _ = QFileDialog.getSaveFileName(self, "保存Excel文件", "", "Excel文件 (*.xlsx)")
+        if path:
+            if not path.endswith('.xlsx'):
+                path += '.xlsx'
+            self.excel_edit.setText(path)
+            
+    def start_extraction(self):
+        cad_folder = self.cad_folder_edit.text()
+        excel_path = self.excel_edit.text()
+        
+        if not cad_folder or not excel_path:
+            QMessageBox.warning(self, "警告", "请先选择CAD文件夹和Excel保存路径")
+            return
+            
+        if not os.path.isdir(cad_folder):
+            QMessageBox.warning(self, "警告", "CAD文件夹路径无效")
+            return
+            
+        # 检查文件夹中是否有DWG文件
+        has_dwg = any(f.lower().endswith('.dwg') for f in os.listdir(cad_folder))
+        if not has_dwg:
+            QMessageBox.warning(self, "警告", "选择的文件夹中没有DWG文件")
+            return
+            
+        # 禁用按钮
+        self.start_button.setEnabled(False)
+        self.cancel_button.setEnabled(True)
+        
+        # 重置进度
+        self.progress_bar.setValue(0)
+        self.status_label.setText("正在初始化...")
+        
+        # 创建并启动提取线程
+        self.extractor_thread = CadExtractorThread(cad_folder, excel_path)
+        self.extractor_thread.progress_signal.connect(self.update_progress)
+        self.extractor_thread.finished_signal.connect(self.extraction_finished)
+        self.extractor_thread.start()
+        
+    def cancel_extraction(self):
+        if self.extractor_thread and self.extractor_thread.isRunning():
+            self.extractor_thread.stop()
+            self.status_label.setText("正在取消操作...")
+            
+    def update_progress(self, progress, message):
+        self.progress_bar.setValue(progress)
+        self.status_label.setText(message)
+        
+    def extraction_finished(self, success, message):
+        self.start_button.setEnabled(True)
+        self.cancel_button.setEnabled(False)
+        
+        if success:
+            self.progress_bar.setValue(100)
+            QMessageBox.information(self, "完成", message)
+        else:
+            QMessageBox.warning(self, "警告", message)
+            
+        self.status_label.setText("操作完成" if success else "操作失败")
+        
+    def closeEvent(self, event):
+        if self.extractor_thread and self.extractor_thread.isRunning():
+            reply = QMessageBox.question(self, '确认退出',
+                                       '提取过程仍在进行中，确定要退出吗?',
+                                       QMessageBox.Yes | QMessageBox.No,
+                                       QMessageBox.No)
+            
+            if reply == QMessageBox.Yes:
+                self.extractor_thread.stop()
+                self.extractor_thread.wait()
+                event.accept()
+            else:
+                event.ignore()
+        else:
+            event.accept()
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+   
+    # 设置应用程序样式
+    app.setStyle('Fusion')
+   
+    window = CadTextExtractorUI()
+    window.show()
+    sys.exit(app.exec_())
