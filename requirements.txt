@@ -1,3 +1,5 @@
 PyQt5
 pyautocad
 openpyxl
+openai
+python-dotenv

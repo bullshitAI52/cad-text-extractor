@@ -88,6 +88,10 @@ python cad_translate_deepseek.py "D:\\中文图纸" "D:\\英文图纸" --glossar
 
 程序会保持源目录结构，不覆盖原图；API 调用结果会缓存在当前运行内存中，避免同一批任务重复翻译相同文本。翻译费用、术语准确性和图面布局需要自行检查，建议先处理一张副本图纸。
 
+## 图形界面
+
+运行 `python cad_translate_ui.py` 可打开图形界面。界面支持填写 API Key、选择 DeepSeek 或 ChatGPT、设置目标语言、选择 CAD 源文件夹、输出文件夹和 Excel 术语表。API Key 只保存在当前进程内存中；DeepSeek 默认使用 `deepseek-chat`，ChatGPT 默认使用 `gpt-4o-mini`，Base URL 和模型名称都可以修改。
+
 帖子代码引用了 `cad_icon.png`。如果没有该图标，需要删除或注释 `setWindowIcon(QIcon("cad_icon.png"))`，否则界面可能在启动时找不到资源。
 
 ## 重要注意事项

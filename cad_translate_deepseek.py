@@ -34,9 +34,10 @@ def load_glossary(path: Path | None) -> dict[str, str]:
         book.close()
 
 
-def translate_one(client: OpenAI, model: str, value: str, cache: dict[str, str]) -> str:
-    if value in cache:
-        return cache[value]
+def translate_one(client: OpenAI, model: str, value: str, cache: dict[str, str], target_language: str = "English") -> str:
+    cache_key = f"{target_language}\0{value}"
+    if cache_key in cache:
+        return cache[cache_key]
     response = client.chat.completions.create(
         model=model,
         temperature=0,
@@ -44,7 +45,7 @@ def translate_one(client: OpenAI, model: str, value: str, cache: dict[str, str])
             {
                 "role": "system",
                 "content": (
-                    "You translate Chinese CAD engineering drawing text into concise professional English. "
+                    f"You translate Chinese CAD engineering drawing text into concise professional {target_language}. "
                     "Preserve numbers, units, symbols, line breaks and identifiers. Return only the translation."
                 ),
             },
@@ -52,17 +53,17 @@ def translate_one(client: OpenAI, model: str, value: str, cache: dict[str, str])
         ],
     )
     translated = (response.choices[0].message.content or value).strip()
-    cache[value] = translated
+    cache[cache_key] = translated
     return translated
 
 
-def run(source_dir: Path, output_dir: Path, glossary_path: Path | None) -> tuple[int, int, int]:
+def run(source_dir: Path, output_dir: Path, glossary_path: Path | None, provider: str = "deepseek", target_language: str = "English", api_key: str | None = None, base_url: str | None = None, model: str | None = None, progress=None) -> tuple[int, int, int]:
     load_dotenv()
-    api_key = os.getenv("DEEPSEEK_API_KEY")
+    api_key = api_key or os.getenv("DEEPSEEK_API_KEY")
     if not api_key:
         raise RuntimeError("请在 .env 中设置 DEEPSEEK_API_KEY")
-    client = OpenAI(api_key=api_key, base_url=os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com"))
-    model = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+    client = OpenAI(api_key=api_key, base_url=base_url or ("https://api.openai.com/v1" if provider == "chatgpt" else "https://api.deepseek.com"))
+    model = model or ("gpt-4o-mini" if provider == "chatgpt" else "deepseek-chat")
     glossary = load_glossary(glossary_path)
     cache: dict[str, str] = {}
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -72,7 +73,8 @@ def run(source_dir: Path, output_dir: Path, glossary_path: Path | None) -> tuple
     with (output_dir / "translation.csv").open("w", newline="", encoding="utf-8-sig") as fp:
         report = csv.writer(fp)
         report.writerow(["中文原文", "英文译文", "来源"])
-        for source in dwg_files(source_dir):
+        files = list(dwg_files(source_dir))
+        for index, source in enumerate(files, 1):
             destination = output_dir / source.relative_to(source_dir)
             destination.parent.mkdir(parents=True, exist_ok=True)
             document = None
@@ -85,8 +87,8 @@ def run(source_dir: Path, output_dir: Path, glossary_path: Path | None) -> tuple
                     translated = glossary.get(original)
                     origin = "glossary"
                     if translated is None:
-                        translated = translate_one(client, model, original, cache)
-                        origin = "deepseek"
+                        translated = translate_one(client, model, original, cache, target_language)
+                        origin = provider
                     if translated != original:
                         entity.TextString = translated
                         file_changed += 1
@@ -104,6 +106,8 @@ def run(source_dir: Path, output_dir: Path, glossary_path: Path | None) -> tuple
                         document.Close(False)
                     except Exception:
                         logging.exception("关闭失败 %s", source)
+            if progress:
+                progress(index, len(files), source.name)
     return processed, changed, failed
 
 
@@ -112,8 +116,10 @@ def main() -> None:
     parser.add_argument("source", type=Path, help="DWG 源文件夹")
     parser.add_argument("output", type=Path, help="英文 DWG 输出文件夹")
     parser.add_argument("--glossary", type=Path, help="可选 Excel 术语表：第一列中文，第二列英文")
+    parser.add_argument("--provider", choices=["deepseek", "chatgpt"], default="deepseek")
+    parser.add_argument("--language", default="English", help="目标语言")
     args = parser.parse_args()
-    result = run(args.source, args.output, args.glossary)
+    result = run(args.source, args.output, args.glossary, args.provider, args.language)
     print(f"完成：处理 {result[0]} 个文件，修改 {result[1]} 个文字对象，失败 {result[2]} 个。")
 
 
