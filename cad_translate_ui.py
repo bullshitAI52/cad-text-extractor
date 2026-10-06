@@ -29,7 +29,19 @@ class Worker(QThread):
 
 class Window(QMainWindow):
     def __init__(self):
-        super().__init__(); self.setWindowTitle("CAD 图纸工具（翻译 / 文本替换）"); self.resize(780, 500); self.worker = None
+        super().__init__(); self.setWindowTitle("CAD 图纸批处理工具"); self.resize(860, 560); self.worker = None
+        self.setStyleSheet("""
+            QMainWindow, QWidget { background: #f4f7fb; color: #1f2937; font-size: 14px; }
+            QTabWidget::pane { border: 1px solid #dbe4f0; background: #ffffff; border-radius: 10px; }
+            QTabBar::tab { background: #e8eef7; padding: 12px 20px; margin-right: 3px; border-radius: 8px 8px 0 0; color: #475569; }
+            QTabBar::tab:selected { background: #2563eb; color: white; font-weight: bold; }
+            QLineEdit, QComboBox { background: white; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px; }
+            QPushButton { background: #2563eb; color: white; border: 0; border-radius: 7px; padding: 10px 18px; font-weight: bold; }
+            QPushButton:hover { background: #1d4ed8; }
+            QProgressBar { background: #e2e8f0; border: 0; border-radius: 6px; height: 12px; text-align: center; }
+            QProgressBar::chunk { background: #22c55e; border-radius: 6px; }
+            QLabel { padding: 3px; }
+        """)
         tabs = QTabWidget(); tabs.addTab(self.translation_page(), "CAD 翻译（调用 AI）"); tabs.addTab(self.replace_page(), "CAD 文本替换（不调用 AI）"); tabs.addTab(self.excel_batch_page(), "CAD 按 Excel 批量自动更换"); self.setCentralWidget(tabs)
     def busy(self):
         if self.worker is not None and self.worker.isRunning():
