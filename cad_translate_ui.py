@@ -31,6 +31,10 @@ class Window(QMainWindow):
     def __init__(self):
         super().__init__(); self.setWindowTitle("CAD 图纸工具（翻译 / 文本替换）"); self.resize(780, 500); self.worker = None
         tabs = QTabWidget(); tabs.addTab(self.translation_page(), "CAD 翻译（调用 AI）"); tabs.addTab(self.replace_page(), "CAD 文本替换（不调用 AI）"); tabs.addTab(self.excel_batch_page(), "CAD 按 Excel 批量自动更换"); self.setCentralWidget(tabs)
+    def busy(self):
+        if self.worker is not None and self.worker.isRunning():
+            QMessageBox.warning(self, "任务正在运行", "请等待当前 CAD 任务完成后，再启动其他模式。"); return True
+        return False
     def translation_page(self):
         page = QWidget(); form = QFormLayout(); self.tr_provider = QComboBox(); self.tr_provider.addItems(["DeepSeek", "ChatGPT"]); self.tr_provider.currentTextChanged.connect(self.provider_changed)
         self.tr_language = QComboBox(); self.tr_language.setEditable(True); self.tr_language.addItems(["English", "Japanese", "Korean", "French", "German"]); self.tr_key = QLineEdit(); self.tr_key.setEchoMode(QLineEdit.Password); self.tr_base = QLineEdit("https://api.deepseek.com/v1"); self.tr_model = QLineEdit("deepseek-chat"); self.tr_source = QLineEdit(); self.tr_output = QLineEdit(); self.tr_glossary = QLineEdit(); self.tr_save_excel = QLineEdit()
@@ -42,13 +46,16 @@ class Window(QMainWindow):
         page = QWidget(); form = QFormLayout(); self.b_source = QLineEdit(); self.b_output = QLineEdit(); self.b_excel = QLineEdit(); form.addRow("CAD 源文件夹", path_row(self.b_source, self, True)); form.addRow("自动更换输出文件夹", path_row(self.b_output, self, True)); form.addRow("Excel 更换表", path_row(self.b_excel, self)); hint = QLabel("独立批处理模式：第 1 列=原文本，第 2 列=新文本。只按 Excel 批量执行，不调用 AI，也不读取其他页签配置。"); self.b_bar = QProgressBar(); self.b_status = QLabel("批量自动更换：准备就绪"); start = QPushButton("开始批量自动更换"); start.clicked.connect(self.start_excel_batch); layout = QVBoxLayout(); layout.addLayout(form); layout.addWidget(hint); layout.addWidget(self.b_bar); layout.addWidget(self.b_status); layout.addWidget(start); page.setLayout(layout); return page
     def provider_changed(self, name): self.tr_base.setText("https://api.openai.com/v1" if name == "ChatGPT" else "https://api.deepseek.com/v1"); self.tr_model.setText("gpt-4o-mini" if name == "ChatGPT" else "deepseek-chat")
     def start_translation(self):
+        if self.busy(): return
         if not Path(self.tr_source.text()).is_dir() or not self.tr_output.text() or not self.tr_key.text().strip(): QMessageBox.warning(self, "配置不完整", "请选择 CAD 源文件夹、英文版输出文件夹并填写 API Key"); return
         values = dict(source_dir=Path(self.tr_source.text()), output_dir=Path(self.tr_output.text()), glossary_path=Path(self.tr_glossary.text()) if self.tr_glossary.text() else None, provider="chatgpt" if self.tr_provider.currentText() == "ChatGPT" else "deepseek", target_language=self.tr_language.currentText(), api_key=self.tr_key.text().strip(), base_url=self.tr_base.text().strip(), model=self.tr_model.text().strip(), report_path=Path(self.tr_save_excel.text()) if self.tr_save_excel.text() else None, preview_only=self.tr_preview.isChecked())
         self.worker = Worker(translate_run, values); self.worker.progress.connect(lambda p, s: (self.tr_bar.setValue(p), self.tr_status.setText(s))); self.worker.finished.connect(lambda ok, msg: self.done(ok, msg, self.tr_status)); self.worker.start()
     def start_replace(self):
+        if self.busy(): return
         if not Path(self.r_source.text()).is_dir() or not self.r_output.text() or not Path(self.r_excel.text()).is_file(): QMessageBox.warning(self, "配置不完整", "请选择 CAD 源文件夹、修改后输出文件夹和替换表 Excel"); return
         values = dict(source_dir=Path(self.r_source.text()), output_dir=Path(self.r_output.text()), excel_path=Path(self.r_excel.text())); self.worker = Worker(replace_run, values); self.worker.progress.connect(lambda p, s: (self.r_bar.setValue(p), self.r_status.setText(s))); self.worker.finished.connect(lambda ok, msg: self.done(ok, msg, self.r_status)); self.worker.start()
     def start_excel_batch(self):
+        if self.busy(): return
         if not Path(self.b_source.text()).is_dir() or not self.b_output.text() or not Path(self.b_excel.text()).is_file(): QMessageBox.warning(self, "配置不完整", "请选择 CAD 源文件夹、自动更换输出文件夹和 Excel 更换表"); return
         values = dict(source_dir=Path(self.b_source.text()), output_dir=Path(self.b_output.text()), excel_path=Path(self.b_excel.text())); self.worker = Worker(replace_run, values); self.worker.progress.connect(lambda p, s: (self.b_bar.setValue(p), self.b_status.setText(s))); self.worker.finished.connect(lambda ok, msg: self.done(ok, msg, self.b_status)); self.worker.start()
     def done(self, success, message, status): status.setText(message); QMessageBox.information(self, "完成" if success else "失败", message)
