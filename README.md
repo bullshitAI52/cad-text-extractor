@@ -12,6 +12,25 @@
 - 将汇总结果保存为 `.xlsx` 文件；
 - 使用 PyQt5 界面显示进度，并支持取消操作。
 
+## 批量替换功能
+
+仓库另附 `cad_batch_replace.py`，用于按 Excel 对照表批量替换 DWG 中的 `Text` 和 `MText`。Excel 前两列分别是原文本和替换文本，例如：
+
+| 原文本 | 替换文本 |
+| --- | --- |
+| x批 | 14批 |
+| 项目A | 项目B |
+
+第一行可以写成“原文本 / 替换文本”表头，也可以直接从第一行开始写规则。替换会处理字符串中的部分匹配；如果同一单元格命中多条规则，将按 Excel 从上到下的顺序执行。
+
+命令行示例：
+
+```powershell
+python cad_batch_replace.py "D:\\图纸" "D:\\替换表.xlsx" "D:\\图纸_已替换"
+```
+
+程序会递归读取源目录下的 DWG，并在输出目录保持相同的子目录结构。原图不会被覆盖，日志写入输出目录的 `cad_batch_replace.log`。程序会启动或连接 AutoCAD；处理前请关闭同名图纸，避免文件被占用。
+
 ## 使用软件和环境
 
 - Windows；
@@ -35,11 +54,13 @@ py -3 -m venv .venv
 python -m pip install PyQt5 pyautocad openpyxl
 ```
 
-然后需要从 `original-post.txt` 中提取代码保存为 `.py` 文件，再运行：
+然后需要从 `original-post.txt` 中提取原始界面代码保存为 `.py` 文件，再运行：
 
 ```powershell
 python cad_text_extractor.py
 ```
+
+批量替换功能可以直接运行仓库中的 `cad_batch_replace.py`，无需使用原始 PyQt 界面。
 
 帖子代码引用了 `cad_icon.png`。如果没有该图标，需要删除或注释 `setWindowIcon(QIcon("cad_icon.png"))`，否则界面可能在启动时找不到资源。
 
@@ -49,6 +70,7 @@ python cad_text_extractor.py
 - 原代码会打开和关闭图纸，但没有完整记录失败文件；批量处理前应先备份图纸。
 - 代码中的 `acad.iter_objects(['Text', 'MText'])`、AutoCAD 版本和 pyautocad 兼容性需要在实际环境验证。
 - 这是原始论坛代码归档，未在当前环境运行，也未修改为生产级版本。
+- `cad_batch_replace.py` 是在原始代码基础上补充的独立替换模块；由于当前环境没有 Windows AutoCAD，未完成真实 DWG/COM 回归测试。
 - 论坛帖子和代码未附独立许可证；使用和再分发请确认原作者授权。
 
 ## 与“批量替换 CAD 文本”代码的区别
