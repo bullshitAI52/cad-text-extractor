@@ -57,7 +57,7 @@ def translate_one(client: OpenAI, model: str, value: str, cache: dict[str, str],
     return translated
 
 
-def run(source_dir: Path, output_dir: Path, glossary_path: Path | None, provider: str = "deepseek", target_language: str = "English", api_key: str | None = None, base_url: str | None = None, model: str | None = None, progress=None) -> tuple[int, int, int]:
+def run(source_dir: Path, output_dir: Path, glossary_path: Path | None, provider: str = "deepseek", target_language: str = "English", api_key: str | None = None, base_url: str | None = None, model: str | None = None, report_path: Path | None = None, progress=None) -> tuple[int, int, int]:
     load_dotenv()
     api_key = api_key or os.getenv("DEEPSEEK_API_KEY")
     if not api_key:
@@ -70,7 +70,9 @@ def run(source_dir: Path, output_dir: Path, glossary_path: Path | None, provider
     logging.basicConfig(filename=output_dir / "cad_translate.log", level=logging.INFO, encoding="utf-8")
     acad = Autocad(create_if_not_exists=True, visible=True)
     processed = changed = failed = 0
-    with (output_dir / "translation.csv").open("w", newline="", encoding="utf-8-sig") as fp:
+    report_file = report_path or (output_dir / "translation.csv")
+    report_file.parent.mkdir(parents=True, exist_ok=True)
+    with report_file.open("w", newline="", encoding="utf-8-sig") as fp:
         report = csv.writer(fp)
         report.writerow(["中文原文", "英文译文", "来源"])
         files = list(dwg_files(source_dir))
