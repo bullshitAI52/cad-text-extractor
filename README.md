@@ -93,6 +93,7 @@ python cad_translate_deepseek.py "D:\\中文图纸" "D:\\英文图纸" --glossar
 运行 `python cad_translate_ui.py` 可打开图形界面。界面分为两个独立页签：
 
 - `CAD 翻译（调用 AI）`：填写 API Key，选择 DeepSeek/ChatGPT 和目标语言；可读取术语表 Excel，也可指定保存翻译对照表的位置；单独选择 CAD 源文件夹和英文版输出文件夹。
+- 翻译页默认勾选“仅生成翻译表，检查后再替换”：此模式只提取文字并生成中英对照表，不保存修改后的 DWG。检查、修正 Excel 后，到“CAD 文本替换（不调用 AI）”页读取这份确认表，再生成最终图纸。
 - `CAD 文本替换（不调用 AI）`：选择 CAD 源文件夹、修改后输出文件夹和替换表 Excel；Excel 第一列是原文本，第二列是替换文本。此页只执行表格替换，不会调用 AI，也不会读取翻译页配置。
 
 DeepSeek 默认使用 `deepseek-chat`，ChatGPT 默认使用 `gpt-4o-mini`，Base URL 和模型名称都可以修改。API Key 只保存在当前进程内存中。

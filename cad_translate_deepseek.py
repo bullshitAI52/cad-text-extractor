@@ -6,14 +6,13 @@
 from __future__ import annotations
 
 import argparse
-import csv
 import logging
 import os
 from pathlib import Path
 
 from dotenv import load_dotenv
 from openai import OpenAI
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
 from pyautocad import Autocad
 
 from cad_batch_replace import dwg_files, replace_text
@@ -57,7 +56,7 @@ def translate_one(client: OpenAI, model: str, value: str, cache: dict[str, str],
     return translated
 
 
-def run(source_dir: Path, output_dir: Path, glossary_path: Path | None, provider: str = "deepseek", target_language: str = "English", api_key: str | None = None, base_url: str | None = None, model: str | None = None, report_path: Path | None = None, progress=None) -> tuple[int, int, int]:
+def run(source_dir: Path, output_dir: Path, glossary_path: Path | None, provider: str = "deepseek", target_language: str = "English", api_key: str | None = None, base_url: str | None = None, model: str | None = None, report_path: Path | None = None, preview_only: bool = False, progress=None) -> tuple[int, int, int]:
     load_dotenv()
     api_key = api_key or os.getenv("DEEPSEEK_API_KEY")
     if not api_key:
@@ -70,13 +69,11 @@ def run(source_dir: Path, output_dir: Path, glossary_path: Path | None, provider
     logging.basicConfig(filename=output_dir / "cad_translate.log", level=logging.INFO, encoding="utf-8")
     acad = Autocad(create_if_not_exists=True, visible=True)
     processed = changed = failed = 0
-    report_file = report_path or (output_dir / "translation.csv")
+    report_file = report_path or (output_dir / "translation.xlsx")
     report_file.parent.mkdir(parents=True, exist_ok=True)
-    with report_file.open("w", newline="", encoding="utf-8-sig") as fp:
-        report = csv.writer(fp)
-        report.writerow(["中文原文", "英文译文", "来源"])
-        files = list(dwg_files(source_dir))
-        for index, source in enumerate(files, 1):
+    report_rows = [["中文原文", "英文译文", "来源"]]
+    files = list(dwg_files(source_dir))
+    for index, source in enumerate(files, 1):
             destination = output_dir / source.relative_to(source_dir)
             destination.parent.mkdir(parents=True, exist_ok=True)
             document = None
@@ -91,11 +88,12 @@ def run(source_dir: Path, output_dir: Path, glossary_path: Path | None, provider
                     if translated is None:
                         translated = translate_one(client, model, original, cache, target_language)
                         origin = provider
-                    if translated != original:
+                    if translated != original and not preview_only:
                         entity.TextString = translated
                         file_changed += 1
-                    report.writerow([original, translated, origin])
-                document.SaveAs(str(destination.resolve()))
+                    report_rows.append([original, translated, origin])
+                if not preview_only:
+                    document.SaveAs(str(destination.resolve()))
                 processed += 1
                 changed += file_changed
                 logging.info("完成 %s，修改 %d 个文字对象", source, file_changed)
@@ -110,6 +108,11 @@ def run(source_dir: Path, output_dir: Path, glossary_path: Path | None, provider
                         logging.exception("关闭失败 %s", source)
             if progress:
                 progress(index, len(files), source.name)
+    workbook = Workbook()
+    sheet = workbook.active
+    for row in report_rows:
+        sheet.append(row)
+    workbook.save(report_file)
     return processed, changed, failed
 
 
