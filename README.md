@@ -62,6 +62,32 @@ python cad_text_extractor.py
 
 批量替换功能可以直接运行仓库中的 `cad_batch_replace.py`，无需使用原始 PyQt 界面。
 
+## DeepSeek 英文翻译版
+
+`cad_translate_deepseek.py` 可以将 DWG 中的中文 `Text/MText` 翻译为英文并另存到新目录。它使用 DeepSeek 的 OpenAI 兼容接口：术语表中的内容优先使用 Excel 翻译，未匹配文本才调用 DeepSeek，并生成 `translation.csv` 和 `cad_translate.log`。
+
+先复制 `.env.example` 为 `.env` 并填写自己的 Key：
+
+```powershell
+Copy-Item .env.example .env
+# 编辑 .env，填写 DEEPSEEK_API_KEY
+```
+
+准备可选术语表 `glossary.xlsx`，第一列为中文，第二列为固定英文：
+
+| 中文 | English |
+| --- | --- |
+| 平面图 | Floor Plan |
+| 立面图 | Elevation |
+
+运行：
+
+```powershell
+python cad_translate_deepseek.py "D:\\中文图纸" "D:\\英文图纸" --glossary "D:\\glossary.xlsx"
+```
+
+程序会保持源目录结构，不覆盖原图；API 调用结果会缓存在当前运行内存中，避免同一批任务重复翻译相同文本。翻译费用、术语准确性和图面布局需要自行检查，建议先处理一张副本图纸。
+
 帖子代码引用了 `cad_icon.png`。如果没有该图标，需要删除或注释 `setWindowIcon(QIcon("cad_icon.png"))`，否则界面可能在启动时找不到资源。
 
 ## 重要注意事项
@@ -71,6 +97,8 @@ python cad_text_extractor.py
 - 代码中的 `acad.iter_objects(['Text', 'MText'])`、AutoCAD 版本和 pyautocad 兼容性需要在实际环境验证。
 - 这是原始论坛代码归档，未在当前环境运行，也未修改为生产级版本。
 - `cad_batch_replace.py` 是在原始代码基础上补充的独立替换模块；由于当前环境没有 Windows AutoCAD，未完成真实 DWG/COM 回归测试。
+- `cad_translate_deepseek.py` 同样需要 Windows AutoCAD/ZWCAD；本仓库只完成 Python 语法级检查，未在真实 CAD 和 DeepSeek 账号下验证。
+- `.env`、API Key、DWG、Excel 和输出文件已加入忽略范围，不应提交到 Git。
 - 论坛帖子和代码未附独立许可证；使用和再分发请确认原作者授权。
 
 ## 与“批量替换 CAD 文本”代码的区别

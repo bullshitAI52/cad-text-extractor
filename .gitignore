@@ -3,4 +3,7 @@ __pycache__/
 *.py[cod]
 *.xlsx
 *.dwg
+.env
+*.csv
+*.log
 .DS_Store
