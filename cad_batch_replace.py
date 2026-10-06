@@ -14,7 +14,10 @@ from pathlib import Path
 from typing import Iterable
 
 from openpyxl import load_workbook
-from pyautocad import Autocad
+try:
+    from pyautocad import Autocad
+except ImportError:  # 允许在非 Windows/CAD 环境检查 Excel 和替换逻辑
+    Autocad = None
 
 
 def load_replacements(excel_path: Path, sheet_name: str | None = None) -> dict[str, str]:
@@ -37,7 +40,8 @@ def load_replacements(excel_path: Path, sheet_name: str | None = None) -> dict[s
 
 def replace_text(value: str, replacements: dict[str, str]) -> tuple[str, int]:
     count = 0
-    for source, target in replacements.items():
+    # 先替换较长的键，避免“型号”先替换后破坏“型号A”等更具体规则。
+    for source, target in sorted(replacements.items(), key=lambda item: len(item[0]), reverse=True):
         occurrences = value.count(source)
         if occurrences:
             value = value.replace(source, target)
@@ -49,7 +53,15 @@ def dwg_files(source_dir: Path) -> Iterable[Path]:
     yield from sorted(p for p in source_dir.rglob("*") if p.is_file() and p.suffix.lower() == ".dwg")
 
 
-def run(source_dir: Path, output_dir: Path, excel_path: Path, sheet_name: str | None = None) -> tuple[int, int, int]:
+def run(source_dir: Path, output_dir: Path, excel_path: Path, sheet_name: str | None = None, progress=None) -> tuple[int, int, int]:
+    source_dir = source_dir.resolve()
+    output_dir = output_dir.resolve()
+    if not source_dir.is_dir():
+        raise FileNotFoundError(f"源文件夹不存在：{source_dir}")
+    if source_dir == output_dir:
+        raise ValueError("输出文件夹不能与源文件夹相同，以免覆盖原图")
+    if Autocad is None:
+        raise RuntimeError("未安装 pyautocad；请在 Windows 上安装 AutoCAD/ZWCAD 后再运行")
     replacements = load_replacements(excel_path, sheet_name)
     if not replacements:
         raise ValueError("Excel 前两列没有可用的替换规则")
@@ -62,7 +74,8 @@ def run(source_dir: Path, output_dir: Path, excel_path: Path, sheet_name: str | 
     )
     acad = Autocad(create_if_not_exists=True, visible=True)
     processed = changed = failed = 0
-    for source_path in dwg_files(source_dir):
+    files = [p for p in dwg_files(source_dir) if output_dir not in p.parents]
+    for index, source_path in enumerate(files, 1):
         relative = source_path.relative_to(source_dir)
         destination = output_dir / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -93,6 +106,8 @@ def run(source_dir: Path, output_dir: Path, excel_path: Path, sheet_name: str | 
                     document.Close(False)
                 except Exception:
                     logging.exception("关闭文档失败 %s", source_path)
+        if progress:
+            progress(index, len(files), source_path.name)
     return processed, changed, failed
 
 

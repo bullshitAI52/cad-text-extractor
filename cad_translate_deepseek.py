@@ -13,7 +13,10 @@ from pathlib import Path
 from dotenv import load_dotenv
 from openai import OpenAI
 from openpyxl import Workbook, load_workbook
-from pyautocad import Autocad
+try:
+    from pyautocad import Autocad
+except ImportError:  # 允许在非 Windows/CAD 环境检查翻译表逻辑
+    Autocad = None
 
 from cad_batch_replace import dwg_files, replace_text
 
@@ -57,11 +60,19 @@ def translate_one(client: OpenAI, model: str, value: str, cache: dict[str, str],
 
 
 def run(source_dir: Path, output_dir: Path, glossary_path: Path | None, provider: str = "deepseek", target_language: str = "English", api_key: str | None = None, base_url: str | None = None, model: str | None = None, report_path: Path | None = None, preview_only: bool = False, progress=None) -> tuple[int, int, int]:
+    source_dir = source_dir.resolve()
+    output_dir = output_dir.resolve()
+    if not source_dir.is_dir():
+        raise FileNotFoundError(f"源文件夹不存在：{source_dir}")
+    if source_dir == output_dir:
+        raise ValueError("输出文件夹不能与源文件夹相同，以免覆盖原图")
+    if Autocad is None:
+        raise RuntimeError("未安装 pyautocad；请在 Windows 上安装 AutoCAD/ZWCAD 后再运行")
     load_dotenv()
     api_key = api_key or os.getenv("DEEPSEEK_API_KEY")
     if not api_key:
         raise RuntimeError("请在 .env 中设置 DEEPSEEK_API_KEY")
-    client = OpenAI(api_key=api_key, base_url=base_url or ("https://api.openai.com/v1" if provider == "chatgpt" else "https://api.deepseek.com"))
+    client = OpenAI(api_key=api_key, base_url=base_url or ("https://api.openai.com/v1" if provider == "chatgpt" else "https://api.deepseek.com/v1"))
     model = model or ("gpt-4o-mini" if provider == "chatgpt" else "deepseek-chat")
     glossary = load_glossary(glossary_path)
     cache: dict[str, str] = {}
@@ -72,7 +83,7 @@ def run(source_dir: Path, output_dir: Path, glossary_path: Path | None, provider
     report_file = report_path or (output_dir / "translation.xlsx")
     report_file.parent.mkdir(parents=True, exist_ok=True)
     report_rows = [["中文原文", "英文译文", "来源"]]
-    files = list(dwg_files(source_dir))
+    files = [p for p in dwg_files(source_dir) if output_dir not in p.parents]
     for index, source in enumerate(files, 1):
             destination = output_dir / source.relative_to(source_dir)
             destination.parent.mkdir(parents=True, exist_ok=True)

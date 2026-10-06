@@ -16,7 +16,7 @@
 - 读取 `Text` 和 `MText` 对象；
 - 提取文件名、序号、文字内容以及 X/Y/Z 坐标；
 - 将汇总结果保存为 `.xlsx` 文件；
-- 使用 PyQt5 界面显示进度，并支持取消操作。
+- 使用 PyQt5 界面显示进度；任务运行期间请勿关闭窗口，当前版本不提供强制取消按钮。
 
 ## 批量替换功能
 
@@ -35,7 +35,7 @@
 python cad_batch_replace.py "D:\\图纸" "D:\\替换表.xlsx" "D:\\图纸_已替换"
 ```
 
-程序会递归读取源目录下的 DWG，并在输出目录保持相同的子目录结构。原图不会被覆盖，日志写入输出目录的 `cad_batch_replace.log`。程序会启动或连接 AutoCAD；处理前请关闭同名图纸，避免文件被占用。
+程序会递归读取源目录下的 DWG，并在输出目录保持相同的子目录结构。原图不会被覆盖，日志写入输出目录的 `cad_batch_replace.log`。输出目录不要放在源目录内部；程序会自动跳过该目录，避免生成文件再次被当作输入。程序会启动或连接 AutoCAD；处理前请关闭同名图纸，避免文件被占用。
 
 ## 使用软件和环境
 
@@ -102,7 +102,7 @@ python cad_translate_deepseek.py "D:\\中文图纸" "D:\\英文图纸" --glossar
 - 翻译页默认勾选“仅生成翻译表，检查后再替换”：此模式只提取文字并生成中英对照表，不保存修改后的 DWG。检查、修正 Excel 后，到“CAD 文本替换（不调用 AI）”页读取这份确认表，再生成最终图纸。
 - `CAD 文本替换（不调用 AI）`：选择 CAD 源文件夹、修改后输出文件夹和替换表 Excel；Excel 第一列是原文本，第二列是替换文本。此页只执行表格替换，不会调用 AI，也不会读取翻译页配置。
 
-DeepSeek 默认使用 `deepseek-chat`，ChatGPT 默认使用 `gpt-4o-mini`，Base URL 和模型名称都可以修改。API Key 只保存在当前进程内存中。
+DeepSeek 默认使用 `deepseek-chat` 和 `https://api.deepseek.com/v1`，ChatGPT 默认使用 `gpt-4o-mini` 和 `https://api.openai.com/v1`，Base URL 和模型名称都可以修改。API Key 只保存在当前进程内存中。
 
 ## 推荐的两阶段工作流
 
